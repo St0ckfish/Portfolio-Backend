@@ -8,10 +8,15 @@ import {
   Param,
   Delete,
   Patch,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BlogsService } from './blogs.service';
-import { Blog } from './blog.model';
+import { Blog } from '../schemas/blog.schema';
+import { CreateBlogDto, UpdateBlogDto } from './dto';
+import { ParseBlogIdPipe } from './pipes/parse-blog-id.pipe';
 
 interface MulterFile {
   fieldname: string;
@@ -30,57 +35,58 @@ export class BlogsController {
   constructor(private readonly blogsService: BlogsService) {}
 
   @Get()
-  getAllBlogs(): Blog[] {
+  async getAllBlogs(): Promise<Blog[]> {
     return this.blogsService.getAllBlogs();
   }
 
   @Get('/:id')
-  getBlogById(@Param('id') id: string): Blog | undefined {
+  async getBlogById(@Param('id', ParseBlogIdPipe) id: string): Promise<Blog> {
     return this.blogsService.getBlogById(id);
   }
 
   @Patch('/:id')
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('image'))
-  updateBlog(
-    @Param('id') id: string,
-    @Body('title') title: string,
-    @Body('content') content: string,
-    @Body('tags') tags?: string,
-    @Body('category') category?: string,
+  async updateBlog(
+    @Param('id', ParseBlogIdPipe) id: string,
+    @Body() updateBlogDto: UpdateBlogDto,
     @UploadedFile() image?: MulterFile,
-  ): Blog | undefined {
-    const tagsArray = tags ? tags.split(',').map((tag) => tag.trim()) : [];
+    @Request() req?: { user?: { id?: string } },
+  ): Promise<Blog> {
+    const authorId = (req?.user?.id as string) || '';
     return this.blogsService.updateBlog(
       id,
-      title,
-      content,
-      tagsArray,
+      updateBlogDto.title,
+      updateBlogDto.content,
+      authorId,
+      updateBlogDto.tags,
       image,
-      category,
+      updateBlogDto.category,
     );
   }
 
   @Delete('/:id')
-  deleteBlog(@Param('id') id: string) {
+  @UseGuards(JwtAuthGuard)
+  async deleteBlog(@Param('id', ParseBlogIdPipe) id: string) {
     return this.blogsService.deleteBlog(id);
   }
 
   @Post()
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('image'))
-  createBlog(
-    @Body('title') title: string,
-    @Body('content') content: string,
-    @Body('tags') tags?: string,
-    @Body('category') category?: string,
+  async createBlog(
+    @Body() createBlogDto: CreateBlogDto,
     @UploadedFile() image?: MulterFile,
-  ): Blog {
-    const tagsArray = tags ? tags.split(',').map((tag) => tag.trim()) : [];
+    @Request() req?: { user?: { id?: string } },
+  ): Promise<Blog> {
+    const authorId = (req?.user?.id as string) || '';
     return this.blogsService.createBlog(
-      title,
-      content,
-      tagsArray,
+      createBlogDto.title,
+      createBlogDto.content,
+      authorId,
+      createBlogDto.tags,
       image,
-      category,
+      createBlogDto.category,
     );
   }
 }
